@@ -173,7 +173,19 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
 .alert-body{flex:1;}
 .alert-emp{font-weight:700;}
 .alert-detail{font-size:11px;color:var(--text2);margin-top:2px;}
-.alert-dias{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;white-space:nowrap;}
+.alert-dias{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;white-space:nowrap;text-align:right;}
+.alert-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+.btn-renovar{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;font-family:'Outfit',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:none;background:var(--green);color:#fff;white-space:nowrap;transition:all .15s;box-shadow:0 2px 6px rgba(26,122,74,.25);}
+.btn-renovar:hover{background:#156038;transform:translateY(-1px);}
+.badge-renovacao{background:var(--purple-light);color:var(--purple);font-size:10px;padding:2px 7px;border-radius:5px;font-weight:700;margin-left:4px;}
+.kpi-split{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:8px;gap:1px;}
+.kpi-split-new{background:var(--green);border-radius:3px 0 0 3px;}
+.kpi-split-renov{background:var(--blue);border-radius:0 3px 3px 0;}
+.renov-legend{display:flex;gap:12px;margin-top:4px;font-size:10px;color:var(--text3);}
+.renov-legend span{display:flex;align-items:center;gap:4px;}
+.renov-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+/* Modal renovação banner */
+.modal-renovacao-banner{background:var(--purple-light);border:1px solid #D8B4FE;border-radius:10px;padding:10px 14px;font-size:12px;color:var(--purple);font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
 
 /* VENDOR CARDS */
 .vendor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:24px;}
@@ -269,7 +281,10 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
     <div class="kpi-row" id="kpi-vendas"></div>
     <div class="sec-hdr">
       <div class="sec-title">Minhas Vendas</div>
-      <button class="btn btn-primary" onclick="openVendaModal()">+ Nova Venda</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="exportarCSV('vendedor')">⬇ Exportar CSV</button>
+        <button class="btn btn-primary" onclick="openVendaModal()">+ Nova Venda</button>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -320,6 +335,7 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
       <div class="sec-title">Todas as Vendas</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="openEquipeModal()">⚙ Gerenciar Equipe</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportarCSV('gestor')">⬇ Exportar CSV</button>
         <button class="btn btn-primary" onclick="openVendaModal()">+ Nova Venda</button>
       </div>
     </div>
@@ -336,8 +352,12 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
 <div class="modal-overlay" id="modal-venda">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">📋 Registrar Nova Venda</div>
+      <div class="modal-title" id="modal-venda-title">📋 Registrar Nova Venda</div>
       <button class="modal-close" onclick="tryCloseVenda()">×</button>
+    </div>
+    <!-- Banner renovação -->
+    <div class="modal-renovacao-banner" id="renovacao-banner" style="display:none">
+      🔄 <span>Renovação — os dados do cliente foram preenchidos automaticamente. Ajuste o valor e o vencimento se necessário.</span>
     </div>
     <div class="form-grid">
 
@@ -615,6 +635,7 @@ let currentUser=null;
 let allVendas=[];
 let selectedCor='#1A7A4A';
 let vendaFormDirty=false;
+let modoRenovacao=false; // flag para saber se é renovação
 
 // ═══ UTILS ═══
 const $=id=>document.getElementById(id);
@@ -724,12 +745,21 @@ function render(id){
 // ═══ RENDER VENDAS ═══
 function renderVendas(){
   const mine=allVendas.filter(v=>v.vendedor_id===currentUser.id);
+  const nova=mine.filter(v=>!v.is_renovacao);
+  const renov=mine.filter(v=>v.is_renovacao);
   const total=mine.reduce((s,v)=>s+Number(v.valor),0);
+  const totalNova=nova.reduce((s,v)=>s+Number(v.valor),0);
+  const totalRenov=renov.reduce((s,v)=>s+Number(v.valor),0);
   const lucro=mine.reduce((s,v)=>s+Number(v.lucro),0);
   const pend=mine.filter(v=>!v.pgto||v.pgto==='Pendente').length;
   const vc=mine.filter(v=>{const d=diasParaVencer(v.vencimento);return d!==null&&d>=0&&d<=30;}).length;
+  const pctRenov=total>0?Math.round(totalRenov/total*100):0;
+  const pctNova=100-pctRenov;
   $('kpi-vendas').innerHTML=`
-    <div class="kpi-card green"><div class="kpi-label">Total Vendido</div><div class="kpi-value" style="font-size:20px">${fmtMoney(total)}</div><div class="kpi-sub">${mine.length} contratos</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Total Faturado</div><div class="kpi-value" style="font-size:20px">${fmtMoney(total)}</div>
+      <div class="kpi-split"><div class="kpi-split-new" style="width:${pctNova}%"></div><div class="kpi-split-renov" style="width:${pctRenov}%"></div></div>
+      <div class="renov-legend"><span><span class="renov-dot" style="background:var(--green)"></span>Nova ${fmtMoney(totalNova)}</span><span><span class="renov-dot" style="background:var(--blue)"></span>Renovação ${fmtMoney(totalRenov)}</span></div>
+    </div>
     <div class="kpi-card blue"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="font-size:20px">${fmtMoney(lucro)}</div><div class="kpi-sub">após repasses</div></div>
     <div class="kpi-card orange"><div class="kpi-label">Pgto Pendente</div><div class="kpi-value">${pend}</div><div class="kpi-sub">cobranças</div></div>
     <div class="kpi-card red"><div class="kpi-label">Vencendo 30d</div><div class="kpi-value">${vc}</div><div class="kpi-sub">laudos</div></div>`;
@@ -753,19 +783,52 @@ function renderVendas(){
 // ═══ RENDER ALERTAS ═══
 function renderAlertas(){
   const src=currentUser.isGestor?allVendas:allVendas.filter(v=>v.vendedor_id===currentUser.id);
-  const al=src.filter(v=>v.vencimento).map(v=>({...v,dias:diasParaVencer(v.vencimento)})).filter(v=>v.dias!==null&&v.dias<=90).sort((a,b)=>a.dias-b.dias);
+  // Most urgent venda per client (by vencimento)
+  const byCliente={};
+  src.filter(v=>v.vencimento).forEach(v=>{
+    const k=v.cnpj||v.empresa;
+    if(!byCliente[k]||v.vencimento<byCliente[k].vencimento)byCliente[k]=v;
+  });
+  const al=Object.values(byCliente)
+    .map(v=>({...v,dias:diasParaVencer(v.vencimento)}))
+    .filter(v=>v.dias!==null&&v.dias<=90)
+    .sort((a,b)=>a.dias-b.dias);
   $('alert-badge').textContent=al.length?`${al.length} alertas`:'';
   if(!al.length){$('alertas-list').innerHTML=`<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Todos os laudos estão em dia!</div></div>`;return;}
   $('alertas-list').innerHTML=al.map(v=>{
     const sv=statusVenc(v.dias);
-    const dt=v.dias<0?`Vencido há ${Math.abs(v.dias)} dias`:`Vence em ${v.dias} dias (${fmtDate(v.vencimento)})`;
+    // D-label
+    let dLabel='';
+    if(v.dias<0)dLabel=`Vencido há ${Math.abs(v.dias)} dias`;
+    else if(v.dias<=15)dLabel=`⚠️ D-${v.dias} — Urgente`;
+    else if(v.dias<=30)dLabel=`D-${v.dias} — Atenção`;
+    else if(v.dias<=60)dLabel=`D-${v.dias} — Enviar proposta`;
+    else dLabel=`D-${v.dias} — Iniciar contato`;
     const vd=currentUser.isGestor?` · ${getUser(v.vendedor_id)?.nome||v.vendedor_id}`:'';
+    const vendaJSON=encodeURIComponent(JSON.stringify({
+      id:v.id,empresa:v.empresa,cnpj:v.cnpj,contato:v.contato,telefone:v.telefone,
+      valor:v.valor,repasse:v.repasse,laudos:v.laudos,link_asaas:v.link_asaas,
+      obs:v.obs,funcoes:v.funcoes,cnae_cod:v.cnae_cod,cnae_desc:v.cnae_desc,vendedor_id:v.vendedor_id
+    }));
     return`<div class="alert-row ${sv.rc}">
       <div class="alert-icon">${sv.label.split(' ')[0]}</div>
-      <div class="alert-body"><div class="alert-emp">${v.empresa}</div><div class="alert-detail">${(v.laudos||[]).join(', ')}${vd} · ${fmtMoney(v.valor)}</div></div>
-      <div class="alert-dias">${dt}</div>
+      <div class="alert-body">
+        <div class="alert-emp">${v.empresa}${v.is_renovacao?'<span class="badge-renovacao">Renovação</span>':''}</div>
+        <div class="alert-detail">${(v.laudos||[]).join(', ')}${vd} · ${fmtMoney(v.valor)} · vence ${fmtDate(v.vencimento)}</div>
+      </div>
+      <div class="alert-actions">
+        <div class="alert-dias">${dLabel}</div>
+        <button class="btn-renovar" onclick="renovarVenda('${vendaJSON}')">🔄 Renovar</button>
+      </div>
     </div>`;
   }).join('');
+}
+
+function renovarVenda(jsonEnc){
+  try{
+    const venda=JSON.parse(decodeURIComponent(jsonEnc));
+    openVendaModal(venda);
+  }catch(e){console.error(e);}
 }
 
 // ═══ RENDER CLIENTES ═══
@@ -808,9 +871,20 @@ function showPerfil(empresaEnc){
   if(!vendas.length)return;
   const totalGasto=vendas.reduce((s,v)=>s+Number(v.valor),0);
   const totalLucro=vendas.reduce((s,v)=>s+Number(v.lucro),0);
+  const nova=vendas.filter(v=>!v.is_renovacao);
+  const renovs=vendas.filter(v=>v.is_renovacao);
   const todosLaudos=[...new Set(vendas.flatMap(v=>v.laudos||[]))];
   const ultimaVenda=vendas[0];
   const sv=statusVenc(diasParaVencer(ultimaVenda.vencimento));
+  // Botão renovar — passa a venda mais recente
+  const vendaJSON=encodeURIComponent(JSON.stringify({
+    id:ultimaVenda.id,empresa:ultimaVenda.empresa,cnpj:ultimaVenda.cnpj,
+    contato:ultimaVenda.contato,telefone:ultimaVenda.telefone,
+    valor:ultimaVenda.valor,repasse:ultimaVenda.repasse,laudos:ultimaVenda.laudos,
+    link_asaas:ultimaVenda.link_asaas,obs:ultimaVenda.obs,
+    funcoes:ultimaVenda.funcoes,cnae_cod:ultimaVenda.cnae_cod,cnae_desc:ultimaVenda.cnae_desc,
+    vendedor_id:ultimaVenda.vendedor_id
+  }));
   // GR e oportunidades
   const cnaeCod=ultimaVenda.cnae_cod||'';
   const cnaeDesc=ultimaVenda.cnae_desc||'';
@@ -860,9 +934,11 @@ function showPerfil(empresaEnc){
         <div class="client-name">${empresa}</div>
         <div class="client-cnpj">${ultimaVenda.cnpj||'CNPJ não cadastrado'}${funcoes?` · <span style="color:var(--text3);font-size:11px">Funções: ${funcoes}</span>`:''}</div>
         <div style="margin-top:8px">${todosLaudos.map(laudoBadge).join('')}</div>
+        <div style="margin-top:10px"><button class="btn-renovar" onclick="renovarVenda('${vendaJSON}')">🔄 Renovar contrato</button></div>
       </div>
       <div class="client-stats">
-        <div class="cstat"><div class="cstat-val">${vendas.length}</div><div class="cstat-label">Contratos</div></div>
+        <div class="cstat"><div class="cstat-val">${nova.length}</div><div class="cstat-label">Vendas Novas</div></div>
+        <div class="cstat"><div class="cstat-val">${renovs.length}</div><div class="cstat-label">Renovações</div></div>
         <div class="cstat"><div class="cstat-val" style="font-size:16px">${fmtMoney(totalGasto)}</div><div class="cstat-label">Total Gasto</div></div>
         <div class="cstat"><div class="cstat-val" style="font-size:16px">${fmtMoney(totalLucro)}</div><div class="cstat-label">Lucro Gerado</div></div>
         <div class="cstat"><div class="cstat-val"><span class="badge ${sv.cls}">${sv.label}</span></div><div class="cstat-label">Vencimento</div></div>
@@ -874,7 +950,7 @@ function showPerfil(empresaEnc){
       <table>
         <thead><tr><th>Data</th><th>Laudos / Serviços</th><th>Valor</th><th>Lucro</th><th>Vencimento</th><th>Pgto</th><th>Obs</th></tr></thead>
         <tbody>${vendas.map(v=>`<tr>
-          <td>${fmtDate(v.data_venda)}</td>
+          <td>${fmtDate(v.data_venda)}${v.is_renovacao?'<span class="badge-renovacao" style="margin-left:6px">Renovação</span>':''}</td>
           <td>${(v.laudos||[]).map(laudoBadge).join('')}</td>
           <td style="font-weight:700">${fmtMoney(v.valor)}</td>
           <td style="color:var(--green);font-weight:700">${fmtMoney(v.lucro)}</td>
@@ -890,11 +966,18 @@ function showPerfil(empresaEnc){
 // ═══ RENDER GESTOR ═══
 function renderGestor(){
   const total=allVendas.reduce((s,v)=>s+Number(v.valor),0);
+  const totalNova=allVendas.filter(v=>!v.is_renovacao).reduce((s,v)=>s+Number(v.valor),0);
+  const totalRenov=allVendas.filter(v=>v.is_renovacao).reduce((s,v)=>s+Number(v.valor),0);
   const lucro=allVendas.reduce((s,v)=>s+Number(v.lucro),0);
   const venc=allVendas.filter(v=>{const d=diasParaVencer(v.vencimento);return d!==null&&d<0;}).length;
   const urg=allVendas.filter(v=>{const d=diasParaVencer(v.vencimento);return d!==null&&d>=0&&d<=30;}).length;
+  const pctRenov=total>0?Math.round(totalRenov/total*100):0;
+  const pctNova=100-pctRenov;
   $('kpi-gestor').innerHTML=`
-    <div class="kpi-card green"><div class="kpi-label">Receita Total</div><div class="kpi-value" style="font-size:18px">${fmtMoney(total)}</div><div class="kpi-sub">${allVendas.length} contratos</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Receita Total</div><div class="kpi-value" style="font-size:18px">${fmtMoney(total)}</div>
+      <div class="kpi-split"><div class="kpi-split-new" style="width:${pctNova}%"></div><div class="kpi-split-renov" style="width:${pctRenov}%"></div></div>
+      <div class="renov-legend"><span><span class="renov-dot" style="background:var(--green)"></span>Nova ${fmtMoney(totalNova)}</span><span><span class="renov-dot" style="background:var(--blue)"></span>Renovação ${fmtMoney(totalRenov)}</span></div>
+    </div>
     <div class="kpi-card blue"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="font-size:18px">${fmtMoney(lucro)}</div><div class="kpi-sub">após repasses</div></div>
     <div class="kpi-card red"><div class="kpi-label">Laudos Vencidos</div><div class="kpi-value">${venc}</div><div class="kpi-sub">clientes</div></div>
     <div class="kpi-card orange"><div class="kpi-label">Renovar em 30d</div><div class="kpi-value">${urg}</div><div class="kpi-sub">oportunidades</div></div>`;
@@ -931,7 +1014,10 @@ function renderGestor(){
 }
 
 // ═══ MODAL VENDA ═══
-function openVendaModal(){
+function openVendaModal(vendaOrigem=null){
+  modoRenovacao=!!vendaOrigem;
+  $('modal-venda-title').textContent=modoRenovacao?'🔄 Registrar Renovação':'📋 Registrar Nova Venda';
+  $('renovacao-banner').style.display=modoRenovacao?'flex':'none';
   $('f-data').value=new Date().toISOString().split('T')[0];
   $('vendedor-row').style.display=currentUser.isGestor?'flex':'none';
   // Populate vendedor select
@@ -946,7 +1032,6 @@ function openVendaModal(){
   };
   buildGrid(LAUDOS_PRINCIPAIS,'laudos-grid-main');
   buildGrid(LAUDOS_NRS,'laudos-grid-nrs');
-  // Reset tab to first
   switchLaudoTab('laudos',document.querySelector('.laudo-tab'));
   vendaFormDirty=false;
   ['f-empresa','f-cnpj','f-contato','f-telefone','f-valor','f-repasse','f-lucro','f-venc','f-asaas','f-obs','f-atividade'].forEach(id=>{if($(id))$(id).value='';});
@@ -957,8 +1042,35 @@ function openVendaModal(){
   $('oport-modal').style.display='none';
   if($('f-funcoes'))$('f-funcoes').value='';
   if($('f-atividade'))$('f-atividade').dataset.cnae='';
+
+  // Se for renovação, pré-preenche com dados da venda original
+  if(vendaOrigem){
+    $('f-empresa').value=vendaOrigem.empresa||'';
+    $('f-cnpj').value=vendaOrigem.cnpj||'';
+    $('f-contato').value=vendaOrigem.contato||'';
+    $('f-telefone').value=vendaOrigem.telefone||'';
+    $('f-valor').value=vendaOrigem.valor||'';
+    $('f-repasse').value=vendaOrigem.repasse||'';
+    $('f-asaas').value=vendaOrigem.link_asaas||'';
+    $('f-obs').value=vendaOrigem.obs||'';
+    if($('f-funcoes'))$('f-funcoes').value=vendaOrigem.funcoes||'';
+    if($('f-atividade')){$('f-atividade').value=vendaOrigem.cnae_desc||'';$('f-atividade').dataset.cnae=vendaOrigem.cnae_cod||'';}
+    if(currentUser.isGestor)$('f-vendedor').value=vendaOrigem.vendedor_id||'';
+    calcLucro();
+    // Marca os laudos da venda original
+    setTimeout(()=>{
+      document.querySelectorAll('.laudo-check').forEach(el=>{
+        if((vendaOrigem.laudos||[]).includes(el.dataset.id)){
+          el.classList.add('checked');
+        }
+      });
+      updateVencAuto();updateSelSummary();
+      // Mostrar GR se tiver cnae
+      if(vendaOrigem.cnae_cod)mostrarGrauRisco(vendaOrigem.cnae_cod,vendaOrigem.cnae_desc||'');
+    },50);
+  }
+
   $('modal-venda').classList.add('open');
-  // Track dirty
   $('modal-venda').querySelectorAll('input,select,textarea').forEach(el=>el.addEventListener('input',()=>vendaFormDirty=true,{once:true}));
 }
 
@@ -990,7 +1102,7 @@ function updateSelSummary(){
   $('sel-summary').textContent=sel.length?`✓ Selecionados: ${sel.join(', ')}`:'';
 }
 
-
+function toggleLaudo(el){
   el.classList.toggle('checked');
   updateVencAuto();updateSelSummary();atualizarOportunidadesModal();
   const hasASO=[...document.querySelectorAll('.laudo-check.checked')].some(e=>e.dataset.id==='ASO');
@@ -1121,6 +1233,7 @@ async function salvarVenda(){
     funcoes:$('f-funcoes')?.value||null,
     cnae_cod:$('f-atividade')?.dataset?.cnae||null,
     cnae_desc:$('f-atividade')?.value||null,
+    is_renovacao:modoRenovacao,
   }]).select();
   btn.disabled=false;btn.textContent='✓ Salvar Venda';
   if(error){console.error(error);toast('❌ Erro ao salvar. Verifique o console.',true);return;}
@@ -1183,6 +1296,58 @@ async function removerVendedor(id){
   renderEquipeList();
   buildLogin();
   toast('Vendedor removido.');
+}
+
+// ═══ EXPORTAR CSV ═══
+function exportarCSV(modo){
+  const dados = modo==='gestor' ? allVendas
+    : allVendas.filter(v=>v.vendedor_id===currentUser.id);
+
+  if(!dados.length){toast('⚠️ Nenhuma venda para exportar.',true);return;}
+
+  const cols=[
+    {h:'Empresa',          f:v=>v.empresa||''},
+    {h:'CNPJ',             f:v=>v.cnpj||''},
+    {h:'Contato',          f:v=>v.contato||''},
+    {h:'Telefone',         f:v=>v.telefone||''},
+    {h:'Vendedor',         f:v=>getUser(v.vendedor_id)?.nome||v.vendedor_id||''},
+    {h:'Tipo',             f:v=>v.is_renovacao?'Renovação':'Nova Venda'},
+    {h:'Laudos',           f:v=>(v.laudos||[]).join(' | ')},
+    {h:'Valor (R$)',       f:v=>Number(v.valor||0).toFixed(2).replace('.',',')},
+    {h:'Repasse (R$)',     f:v=>Number(v.repasse||0).toFixed(2).replace('.',',')},
+    {h:'Lucro Líquido (R$)',f:v=>Number(v.lucro||0).toFixed(2).replace('.',',')},
+    {h:'Data Venda',       f:v=>fmtDate(v.data_venda)},
+    {h:'Vencimento',       f:v=>fmtDate(v.vencimento)},
+    {h:'Dias p/ Vencer',   f:v=>{ const d=diasParaVencer(v.vencimento); return d===null?'':String(d); }},
+    {h:'Status Vencimento',f:v=>statusVenc(diasParaVencer(v.vencimento)).label.replace(/[🔴🟠🟡🔵🟢]/u,'').trim()},
+    {h:'Pagamento',        f:v=>v.pgto||'Pendente'},
+    {h:'CNAE',             f:v=>v.cnae_desc||''},
+    {h:'Grau de Risco',    f:v=>{ const g=getGrauRisco(v.cnae_cod); return g?`GR${g}`:''; }},
+    {h:'Funções',          f:v=>v.funcoes||''},
+    {h:'Link Asaas',       f:v=>v.link_asaas||''},
+    {h:'Observações',      f:v=>v.obs||''},
+  ];
+
+  // BOM para Excel reconhecer UTF-8
+  const BOM='\uFEFF';
+  const header=cols.map(c=>`"${c.h}"`).join(';');
+  const rows=dados.map(v=>
+    cols.map(c=>{
+      const val=c.f(v).replace(/"/g,'""');
+      return `"${val}"`;
+    }).join(';')
+  );
+
+  const csv=BOM+[header,...rows].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const hoje=new Date().toISOString().split('T')[0];
+  a.href=url;
+  a.download=`LFSST_vendas_${modo==='gestor'?'todas':currentUser.id}_${hoje}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`✅ ${dados.length} registros exportados!`);
 }
 
 // ═══ TOAST ═══
