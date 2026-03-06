@@ -195,6 +195,13 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
 .btn-periodo{padding:5px 13px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;font-family:'Outfit',sans-serif;color:var(--text2);cursor:pointer;transition:all .15s;}
 .btn-periodo:hover{border-color:var(--green);color:var(--green);}
 .btn-periodo.active{background:var(--green);border-color:var(--green);color:#fff;}
+.input-data-periodo{padding:4px 8px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-family:'Outfit',sans-serif;color:var(--text);outline:none;width:100px;}
+.input-data-periodo:focus{border-color:var(--green);}
+.input-data-periodo::placeholder{color:var(--text3);}
+.data-wrap{position:relative;display:inline-flex;align-items:center;}
+.data-wrap .ico-cal{position:absolute;right:6px;cursor:pointer;font-size:13px;color:var(--text3);user-select:none;}
+.data-wrap .ico-cal:hover{color:var(--green);}
+.data-wrap input[type="date"]{position:absolute;opacity:0;width:0;height:0;pointer-events:none;}
 /* Modal renovação banner */
 .modal-renovacao-banner{background:var(--purple-light);border:1px solid #D8B4FE;border-radius:10px;padding:10px 14px;font-size:12px;color:var(--purple);font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
 
@@ -271,8 +278,44 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
       <div class="brand">LF <span>SST</span></div>
       <div class="tagline">Soluções em Segurança no Trabalho</div>
     </div>
-    <div class="login-sub">Selecione seu perfil para entrar</div>
-    <div class="user-pills" id="user-list"></div>
+    <!-- STEP 1: Escolher usuário -->
+    <div id="login-step1">
+      <div class="login-sub">Selecione seu perfil para entrar</div>
+      <div class="user-pills" id="user-list"></div>
+    </div>
+    <!-- STEP 2: Digitar senha -->
+    <div id="login-step2" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <button onclick="voltarStep1()" style="background:none;border:none;cursor:pointer;font-size:18px;color:rgba(255,255,255,0.5);">‹</button>
+        <div id="login-step2-user" style="display:flex;align-items:center;gap:10px;">
+          <div class="pill-av" id="step2-av" style="width:36px;height:36px;font-size:14px"></div>
+          <div>
+            <div style="font-weight:700;color:#fff;font-size:15px" id="step2-nome"></div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4)" id="step2-role"></div>
+          </div>
+        </div>
+      </div>
+      <div id="login-msg" style="display:none;font-size:12px;margin-bottom:12px;padding:8px 12px;border-radius:8px;"></div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label style="color:rgba(255,255,255,0.6);font-size:12px;" id="senha-label">Senha</label>
+        <div style="position:relative">
+          <input id="login-senha" type="password" placeholder="Digite sua senha" autocomplete="current-password"
+            style="width:100%;padding:12px 40px 12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-family:'Outfit',sans-serif;font-size:14px;outline:none;box-sizing:border-box;"
+            onkeydown="if(event.key==='Enter')confirmarSenha()">
+          <span onclick="toggleSenhaVis('login-senha',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:rgba(255,255,255,0.4);">👁</span>
+        </div>
+      </div>
+      <div id="login-confirmar-wrap" style="display:none;margin-bottom:14px;">
+        <label style="color:rgba(255,255,255,0.6);font-size:12px;">Confirmar senha</label>
+        <input id="login-confirmar" type="password" placeholder="Repita a senha"
+          style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#fff;font-family:'Outfit',sans-serif;font-size:14px;outline:none;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')confirmarSenha()">
+      </div>
+      <button onclick="confirmarSenha()" id="btn-entrar"
+        style="width:100%;padding:13px;border-radius:10px;border:none;background:var(--green);color:#fff;font-family:'Outfit',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">
+        Entrar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -296,6 +339,20 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
       <button class="btn-periodo" onclick="setPeriodo('vendas','semestre',this)">6 meses</button>
       <button class="btn-periodo" onclick="setPeriodo('vendas','trimestre',this)">3 meses</button>
       <button class="btn-periodo" onclick="setPeriodo('vendas','mes',this)">Este mês</button>
+      <span style="color:var(--border);margin:0 4px">|</span>
+      <label>De</label>
+      <div class="data-wrap">
+        <input type="text" id="vendas-de" class="input-data-periodo" placeholder="dd/mm/aaaa" maxlength="10" oninput="mascaraData(this,'vendas')" onblur="aplicarCustomVendas()">
+        <span class="ico-cal" onclick="abrirPicker('vendas-de-picker','vendas-de','vendas')">📅</span>
+        <input type="date" id="vendas-de-picker" onchange="pickerParaTexto('vendas-de-picker','vendas-de','vendas')">
+      </div>
+      <label>Até</label>
+      <div class="data-wrap">
+        <input type="text" id="vendas-ate" class="input-data-periodo" placeholder="dd/mm/aaaa" maxlength="10" oninput="mascaraData(this,'vendas')" onblur="aplicarCustomVendas()">
+        <span class="ico-cal" onclick="abrirPicker('vendas-ate-picker','vendas-ate','vendas')">📅</span>
+        <input type="date" id="vendas-ate-picker" onchange="pickerParaTexto('vendas-ate-picker','vendas-ate','vendas')">
+      </div>
+      <button class="btn-periodo" id="btn-limpar-vendas" style="display:none;color:var(--red)" onclick="limparCustom('vendas')">✕</button>
     </div>
     <div class="kpi-row" id="kpi-vendas"></div>
     <div class="sec-hdr">
@@ -355,6 +412,20 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
       <button class="btn-periodo" onclick="setPeriodo('gestor','semestre',this)">6 meses</button>
       <button class="btn-periodo" onclick="setPeriodo('gestor','trimestre',this)">3 meses</button>
       <button class="btn-periodo" onclick="setPeriodo('gestor','mes',this)">Este mês</button>
+      <span style="color:var(--border);margin:0 4px">|</span>
+      <label>De</label>
+      <div class="data-wrap">
+        <input type="text" id="gestor-de" class="input-data-periodo" placeholder="dd/mm/aaaa" maxlength="10" oninput="mascaraData(this,'gestor')" onblur="aplicarCustomGestor()">
+        <span class="ico-cal" onclick="abrirPicker('gestor-de-picker','gestor-de','gestor')">📅</span>
+        <input type="date" id="gestor-de-picker" onchange="pickerParaTexto('gestor-de-picker','gestor-de','gestor')">
+      </div>
+      <label>Até</label>
+      <div class="data-wrap">
+        <input type="text" id="gestor-ate" class="input-data-periodo" placeholder="dd/mm/aaaa" maxlength="10" oninput="mascaraData(this,'gestor')" onblur="aplicarCustomGestor()">
+        <span class="ico-cal" onclick="abrirPicker('gestor-ate-picker','gestor-ate','gestor')">📅</span>
+        <input type="date" id="gestor-ate-picker" onchange="pickerParaTexto('gestor-ate-picker','gestor-ate','gestor')">
+      </div>
+      <button class="btn-periodo" id="btn-limpar-gestor" style="display:none;color:var(--red)" onclick="limparCustom('gestor')">✕</button>
     </div>
     <div class="kpi-row" id="kpi-gestor"></div>
     <div class="vendor-grid" id="vendor-grid"></div>
@@ -680,7 +751,9 @@ let selectedCor='#1A7A4A';
 let vendaFormDirty=false;
 let modoRenovacao=false;
 let periodoGestor='todos';
-let periodoVendas='todos'; // flag para saber se é renovação
+let periodoVendas='todos';
+let customGestor={de:null,ate:null};
+let customVendas={de:null,ate:null};
 
 // ═══ UTILS ═══
 const $=id=>document.getElementById(id);
@@ -719,7 +792,7 @@ async function init(){
   try{
     const{data,error}=await db.from('vendedores').select('*');
     if(error)throw error;
-    USERS=data.map(u=>({id:u.id,nome:u.nome,role:u.role,cor:u.cor,isGestor:u.is_gestor}));
+    USERS=data.map(u=>({id:u.id,nome:u.nome,role:u.role,cor:u.cor,isGestor:u.is_gestor,senha_hash:u.senha_hash||null}));
     await loadVendas();
   }catch(e){
     console.error('DB init:',e);
@@ -743,18 +816,106 @@ async function loadVendas(){
 }
 
 // ═══ LOGIN ═══
+let loginUser=null; // usuário selecionado antes de digitar senha
+
 function buildLogin(){
   $('user-list').innerHTML=USERS.map(u=>`
-    <div class="user-pill" onclick="login('${u.id}')">
+    <div class="user-pill" onclick="selecionarUser('${u.id}')">
       <div class="pill-av" style="background:${u.cor}">${initials(u.nome)}</div>
       <div><div class="pill-name">${u.nome}</div><div class="pill-role">${u.role}</div></div>
       <div class="pill-arr">›</div>
     </div>`).join('');
 }
 
-async function login(uid){
-  currentUser=getUser(uid);
-  if(!currentUser)return;
+function selecionarUser(uid){
+  loginUser=getUser(uid);
+  if(!loginUser) return;
+  // Preenche step2
+  $('step2-av').textContent=initials(loginUser.nome);
+  $('step2-av').style.background=loginUser.cor;
+  $('step2-nome').textContent=loginUser.nome;
+  $('step2-role').textContent=loginUser.role;
+  // Verifica se usuário já tem senha cadastrada
+  const temSenha=USERS.find(u=>u.id===uid)?.senha_hash;
+  if(!temSenha){
+    // Primeiro acesso — pede criar senha
+    $('senha-label').textContent='Criar sua senha';
+    $('login-confirmar-wrap').style.display='block';
+    $('btn-entrar').textContent='Criar senha e entrar';
+    mostrarMsg('login-msg','🔑 Primeiro acesso — crie uma senha para continuar.','#1A5799','#EEF4FB');
+  } else {
+    $('senha-label').textContent='Senha';
+    $('login-confirmar-wrap').style.display='none';
+    $('btn-entrar').textContent='Entrar';
+    esconderMsg('login-msg');
+  }
+  $('login-senha').value='';
+  $('login-confirmar').value='';
+  $('login-step1').style.display='none';
+  $('login-step2').style.display='block';
+  setTimeout(()=>$('login-senha').focus(),100);
+}
+
+function voltarStep1(){
+  loginUser=null;
+  $('login-step2').style.display='none';
+  $('login-step1').style.display='block';
+}
+
+function mostrarMsg(id, texto, cor, bg){
+  const el=$(id);
+  el.textContent=texto;
+  el.style.color=cor;
+  el.style.background=bg;
+  el.style.display='block';
+}
+function esconderMsg(id){ $(id).style.display='none'; }
+
+function toggleSenhaVis(inputId, btn){
+  const el=$(inputId);
+  el.type=el.type==='password'?'text':'password';
+  btn.textContent=el.type==='password'?'👁':'🙈';
+}
+
+// Hash simples (SHA-256 via Web Crypto)
+async function hashSenha(senha){
+  const buf=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function confirmarSenha(){
+  const senha=$('login-senha').value.trim();
+  if(!senha){ mostrarMsg('login-msg','⚠️ Digite sua senha.','#b45309','#FEF5EC'); return; }
+  const temSenha=USERS.find(u=>u.id===loginUser.id)?.senha_hash;
+  if(!temSenha){
+    // Cadastrar nova senha
+    const confirmar=$('login-confirmar').value.trim();
+    if(senha.length<4){ mostrarMsg('login-msg','⚠️ Senha deve ter pelo menos 4 caracteres.','#b45309','#FEF5EC'); return; }
+    if(senha!==confirmar){ mostrarMsg('login-msg','⚠️ As senhas não coincidem.','#b45309','#FEF5EC'); return; }
+    const hash=await hashSenha(senha);
+    const {error}=await db.from('vendedores').update({senha_hash:hash}).eq('id',loginUser.id);
+    if(error){ mostrarMsg('login-msg','❌ Erro ao salvar senha. Tente novamente.','#C0392B','#FDF0EF'); return; }
+    // Atualiza local
+    const u=USERS.find(u=>u.id===loginUser.id);
+    if(u) u.senha_hash=hash;
+    mostrarMsg('login-msg','✅ Senha criada!','#1A7A4A','#E6F4EC');
+    setTimeout(()=>finalizarLogin(),600);
+  } else {
+    // Verificar senha
+    const hash=await hashSenha(senha);
+    if(hash!==temSenha){
+      mostrarMsg('login-msg','❌ Senha incorreta.','#C0392B','#FDF0EF');
+      $('login-senha').value='';
+      $('login-senha').focus();
+      return;
+    }
+    finalizarLogin();
+  }
+}
+
+async function finalizarLogin(){
+  currentUser=loginUser;
+  loginUser=null;
   $('login-screen').classList.remove('show');
   $('app').classList.add('show');
   const av=$('hdr-av');av.textContent=initials(currentUser.nome);av.style.background=currentUser.cor;
@@ -764,7 +925,18 @@ async function login(uid){
   showFirstPage();
 }
 
-function logout(){currentUser=null;$('app').classList.remove('show');$('login-screen').classList.add('show');}
+async function login(uid){
+  // compatibilidade legada — redireciona para novo fluxo
+  selecionarUser(uid);
+}
+
+function logout(){
+  currentUser=null;loginUser=null;
+  $('app').classList.remove('show');
+  $('login-step2').style.display='none';
+  $('login-step1').style.display='block';
+  $('login-screen').classList.add('show');
+}
 
 // ═══ NAV ═══
 function buildNav(){
@@ -789,7 +961,7 @@ function render(id){
 
 // ═══ RENDER VENDAS ═══
 function renderVendas(){
-  const filtradas=filtrarPorPeriodo(allVendas.filter(v=>v.vendedor_id===currentUser.id), periodoVendas);
+  const filtradas=filtrarPorPeriodo(allVendas.filter(v=>v.vendedor_id===currentUser.id), periodoVendas, customVendas);
   const mine=filtradas;
   const nova=mine.filter(v=>!v.is_renovacao);
   const renov=mine.filter(v=>v.is_renovacao);
@@ -1010,7 +1182,17 @@ function showPerfil(empresaEnc){
 }
 
 // ═══ RENDER GESTOR ═══
-function filtrarPorPeriodo(vendas, periodo){
+function filtrarPorPeriodo(vendas, periodo, custom){
+  // Custom range takes priority
+  if(custom && (custom.de || custom.ate)){
+    return vendas.filter(v=>{
+      if(!v.data_venda) return false;
+      const d=new Date(v.data_venda);
+      if(custom.de && d < new Date(custom.de)) return false;
+      if(custom.ate && d > new Date(custom.ate+'T23:59:59')) return false;
+      return true;
+    });
+  }
   if(periodo==='todos') return vendas;
   const hoje=new Date();
   const inicio=new Date();
@@ -1025,12 +1207,96 @@ function filtrarPorPeriodo(vendas, periodo){
   });
 }
 
+function mascaraData(el, pagina){
+  let v=el.value.replace(/\D/g,'');
+  if(v.length>=3) v=v.slice(0,2)+'/'+v.slice(2);
+  if(v.length>=6) v=v.slice(0,5)+'/'+v.slice(5,9);
+  el.value=v;
+  if(v.length===10) pagina==='gestor'?aplicarCustomGestor():aplicarCustomVendas();
+}
+
+function abrirPicker(pickerId, textId, pagina){
+  const picker=$(pickerId);
+  // Sync current text value to picker
+  const txt=$(textId).value;
+  if(txt.length===10){
+    const [d,m,a]=txt.split('/');
+    if(d&&m&&a) picker.value=`${a}-${m}-${d}`;
+  }
+  picker.style.pointerEvents='all';
+  picker.showPicker?.();
+  picker.click();
+}
+
+function pickerParaTexto(pickerId, textId, pagina){
+  const val=$(pickerId).value; // yyyy-mm-dd
+  if(val){
+    const [a,m,d]=val.split('-');
+    $(textId).value=`${d}/${m}/${a}`;
+  }
+  pagina==='gestor'?aplicarCustomGestor():aplicarCustomVendas();
+}
+
+function parseDateBR(str){
+  if(!str||str.length!==10) return null;
+  const [d,m,a]=str.split('/');
+  if(!d||!m||!a) return null;
+  const dt=new Date(`${a}-${m}-${d}`);
+  return isNaN(dt)?null:dt;
+}
+
+function aplicarCustomGestor(){
+  const de=parseDateBR($('gestor-de').value);
+  const ate=parseDateBR($('gestor-ate').value);
+  customGestor={de:de?$('gestor-de').value.split('/').reverse().join('-'):null,
+                ate:ate?$('gestor-ate').value.split('/').reverse().join('-'):null};
+  if(customGestor.de||customGestor.ate){
+    document.querySelectorAll('#page-gestor .btn-periodo').forEach(b=>b.classList.remove('active'));
+    $('btn-limpar-gestor').style.display='inline-block';
+  }
+  renderGestor();
+}
+
+function aplicarCustomVendas(){
+  const de=parseDateBR($('vendas-de').value);
+  const ate=parseDateBR($('vendas-ate').value);
+  customVendas={de:de?$('vendas-de').value.split('/').reverse().join('-'):null,
+                ate:ate?$('vendas-ate').value.split('/').reverse().join('-'):null};
+  if(customVendas.de||customVendas.ate){
+    document.querySelectorAll('#page-vendas .btn-periodo').forEach(b=>b.classList.remove('active'));
+    $('btn-limpar-vendas').style.display='inline-block';
+  }
+  renderVendas();
+}
+
+function limparCustom(pagina){
+  if(pagina==='gestor'){
+    customGestor={de:null,ate:null};
+    $('gestor-de').value='';$('gestor-ate').value='';
+    $('btn-limpar-gestor').style.display='none';
+    document.querySelectorAll('#page-gestor .btn-periodo').forEach((b,i)=>{if(i===0)b.classList.add('active');});
+    periodoGestor='todos';renderGestor();
+  } else {
+    customVendas={de:null,ate:null};
+    $('vendas-de').value='';$('vendas-ate').value='';
+    $('btn-limpar-vendas').style.display='none';
+    document.querySelectorAll('#page-vendas .btn-periodo').forEach((b,i)=>{if(i===0)b.classList.add('active');});
+    periodoVendas='todos';renderVendas();
+  }
+}
+
 function setPeriodo(pagina, periodo, btn){
   if(pagina==='gestor'){
     periodoGestor=periodo;
+    customGestor={de:null,ate:null};
+    $('gestor-de').value='';$('gestor-ate').value='';
+    $('btn-limpar-gestor').style.display='none';
     document.querySelectorAll('#page-gestor .btn-periodo').forEach(b=>b.classList.remove('active'));
   } else {
     periodoVendas=periodo;
+    customVendas={de:null,ate:null};
+    $('vendas-de').value='';$('vendas-ate').value='';
+    $('btn-limpar-vendas').style.display='none';
     document.querySelectorAll('#page-vendas .btn-periodo').forEach(b=>b.classList.remove('active'));
   }
   btn.classList.add('active');
@@ -1039,7 +1305,7 @@ function setPeriodo(pagina, periodo, btn){
 }
 
 function renderGestor(){
-  const filtradas=filtrarPorPeriodo(allVendas, periodoGestor);
+  const filtradas=filtrarPorPeriodo(allVendas, periodoGestor, customGestor);
   const total=filtradas.reduce((s,v)=>s+Number(v.valor),0);
   const totalNova=filtradas.filter(v=>!v.is_renovacao).reduce((s,v)=>s+Number(v.valor),0);
   const totalRenov=filtradas.filter(v=>v.is_renovacao).reduce((s,v)=>s+Number(v.valor),0);
