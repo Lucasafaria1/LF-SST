@@ -790,7 +790,7 @@ function pgtoClass(p){
 // ═══ INIT ═══
 async function init(){
   try{
-    const{data,error}=await db.from('vendedores').select('*');
+    const{data,error}=await db.from('vendedores').select('*').or('ativo.is.null,ativo.eq.true');
     if(error)throw error;
     USERS=data.map(u=>({id:u.id,nome:u.nome,role:u.role,cor:u.cor,isGestor:u.is_gestor,senha_hash:u.senha_hash||null}));
     await loadVendas();
