@@ -1752,7 +1752,16 @@ async function deletarVenda(id){
 }
 
 // ═══ GERENCIAR EQUIPE ═══
-function openEquipeModal(){
+let ALL_USERS=[]; // inclui inativos, usado só na tela de gerenciar equipe
+
+async function openEquipeModal(){
+  // Busca todos os vendedores (incluindo inativos) só pra essa tela
+  const{data,error}=await db.from('vendedores').select('*');
+  if(!error&&data){
+    ALL_USERS=data.map(u=>({id:u.id,nome:u.nome,role:u.role,cor:u.cor,isGestor:u.is_gestor,ativo:u.ativo!==false}));
+  } else {
+    ALL_USERS=[...USERS];
+  }
   renderEquipeList();
   closeModal('modal-venda');
   $('modal-equipe').classList.add('open');
@@ -1763,13 +1772,45 @@ function openEquipeModal(){
 }
 
 function renderEquipeList(){
-  $('equipe-list').innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text3)">Equipe atual</div>`+
-  USERS.map(u=>`
+  const ativos=ALL_USERS.filter(u=>u.ativo);
+  const inativos=ALL_USERS.filter(u=>!u.ativo);
+  let html=`<div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text3)">Equipe ativa</div>`;
+  html+=ativos.map(u=>`
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid var(--border);margin-bottom:8px;background:var(--bg);">
       <div class="av-sm" style="background:${u.cor};width:36px;height:36px">${initials(u.nome)}</div>
       <div style="flex:1"><div style="font-weight:600;font-size:13px">${u.nome}</div><div style="font-size:11px;color:var(--text3)">${u.role}</div></div>
-      ${!u.isGestor?`<button class="btn btn-danger btn-sm" onclick="removerVendedor('${u.id}')">Remover</button>`:'<span class="badge badge-green">Gestor</span>'}
+      ${u.isGestor?'<span class="badge badge-green">Gestor</span>':`
+        <button class="btn btn-ghost btn-sm" onclick="setAtivoVendedor('${u.id}',false)" title="Ocultar do login mas preservar histórico">⏸ Pausar</button>
+        <button class="btn btn-danger btn-sm" onclick="removerVendedor('${u.id}')">🗑</button>
+      `}
     </div>`).join('');
+  if(inativos.length){
+    html+=`<div style="font-size:13px;font-weight:600;margin:16px 0 10px;color:var(--text3)">Inativos (ocultos do login)</div>`;
+    html+=inativos.map(u=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid var(--border);margin-bottom:8px;background:var(--bg);opacity:0.6">
+        <div class="av-sm" style="background:${u.cor};width:36px;height:36px">${initials(u.nome)}</div>
+        <div style="flex:1"><div style="font-weight:600;font-size:13px">${u.nome}</div><div style="font-size:11px;color:var(--text3)">${u.role} · pausado</div></div>
+        <button class="btn btn-primary btn-sm" onclick="setAtivoVendedor('${u.id}',true)">▶ Reativar</button>
+      </div>`).join('');
+  }
+  $('equipe-list').innerHTML=html;
+}
+
+async function setAtivoVendedor(id,ativo){
+  const{error}=await db.from('vendedores').update({ativo}).eq('id',id);
+  if(error){toast('❌ Erro ao atualizar.',true);console.error(error);return;}
+  // Atualiza estado local
+  const u=ALL_USERS.find(x=>x.id===id);
+  if(u)u.ativo=ativo;
+  // Re-sincroniza USERS (que é usado no login e nos cards de gestor)
+  if(ativo){
+    if(!USERS.find(x=>x.id===id))USERS.push({id:u.id,nome:u.nome,role:u.role,cor:u.cor,isGestor:u.isGestor});
+  } else {
+    USERS=USERS.filter(x=>x.id!==id);
+  }
+  renderEquipeList();
+  buildLogin();
+  toast(ativo?'✅ Vendedor reativado':'⏸ Vendedor pausado');
 }
 
 async function addVendedor(){
