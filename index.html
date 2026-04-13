@@ -517,6 +517,7 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
             <button class="laudo-tab active" onclick="switchLaudoTab('laudos',this)">📄 Laudos & Serviços</button>
             <button class="laudo-tab" onclick="switchLaudoTab('nrs',this)">🎓 Treinamentos NR</button>
             <button class="laudo-tab" onclick="switchLaudoTab('medicoes',this)">📏 Medições</button>
+            <button class="laudo-tab" onclick="switchLaudoTab('psicossocial',this)">🧠 Psicossocial</button>
           </div>
           <!-- Painel: Laudos -->
           <div class="laudo-panel active" id="panel-laudos">
@@ -542,6 +543,34 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
             </div>
             <div class="laudos-grid" style="grid-template-columns:repeat(2,1fr)" id="laudos-grid-medicoes"></div>
             <div id="medicoes-subtotal" style="display:none;font-size:12px;font-weight:700;color:var(--green);margin-top:8px;text-align:right;"></div>
+          </div>
+          <!-- Painel: Psicossocial -->
+          <div class="laudo-panel" id="panel-psicossocial">
+            <div style="padding:12px 4px;">
+              <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;">
+                🧠 <strong>Avaliação de Riscos Psicossociais</strong><br>
+                <span style="color:var(--text3);font-size:11px;">Conforme NR-1 atualizada · R$ ${PSICOSSOCIAL_VALOR_POR_COLAB},00 por colaborador · Validade 12 meses</span>
+              </div>
+              <label class="laudo-check" id="psico-toggle" onclick="togglePsicossocial(this)" style="padding:14px 16px;">
+                <span style="font-size:18px">🧠</span>
+                <span style="font-weight:600">Incluir Avaliação Psicossocial</span>
+              </label>
+              <div id="psico-config" style="display:none;margin-top:12px;padding:14px;background:var(--surface2);border-radius:10px;">
+                <div class="form-grid-2">
+                  <div class="form-group">
+                    <label>Nº de colaboradores *</label>
+                    <input id="f-psico-colabs" type="number" min="1" placeholder="Ex: 15" oninput="calcPsicossocial()">
+                  </div>
+                  <div class="form-group">
+                    <label>Subtotal</label>
+                    <input id="f-psico-subtotal" type="text" readonly style="font-weight:700;color:var(--purple);background:#fff;">
+                  </div>
+                </div>
+                <div style="font-size:11px;color:var(--text3);margin-top:8px;">
+                  💡 Valor base: R$ ${PSICOSSOCIAL_VALOR_POR_COLAB} × colaboradores. Edite o "Valor Total" abaixo se quiser aplicar desconto.
+                </div>
+              </div>
+            </div>
           </div>
           <div class="sel-summary" id="sel-summary"></div>
         </div>
@@ -669,6 +698,8 @@ const MEDICOES_CONFIG=[
   {id:'Medição-Calor',          label:'Calor',                  icon:'🌡️', valor:300},
   {id:'Medição-VMB',            label:'Vibração Mãos e Braços', icon:'🤲', valor:600},
 ];
+const PSICOSSOCIAL_VALOR_POR_COLAB=100;
+const PSICOSSOCIAL_MESES=12;
 const LAUDOS_CONFIG=[...LAUDOS_PRINCIPAIS,...LAUDOS_NRS];
 
 // ═══ TABELA NR-4: CNAE → Grau de Risco ═══
@@ -1152,7 +1183,10 @@ function showPerfil(empresaEnc){
         <div class="client-name">${empresa}</div>
         <div class="client-cnpj">${ultimaVenda.cnpj||'CNPJ não cadastrado'}${funcoes?` · <span style="color:var(--text3);font-size:11px">Funções: ${funcoes}</span>`:''}</div>
         <div style="margin-top:8px">${todosLaudos.map(laudoBadge).join('')}</div>
-        <div style="margin-top:10px"><button class="btn-renovar" onclick="renovarVenda('${vendaJSON}')">🔄 Renovar contrato</button></div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-renovar" onclick="renovarVenda('${vendaJSON}')">🔄 Renovar contrato</button>
+          <button class="btn btn-danger btn-sm" onclick="deletarClienteInteiro('${encodeURIComponent(empresa)}')">🗑 Excluir cliente</button>
+        </div>
       </div>
       <div class="client-stats">
         <div class="cstat"><div class="cstat-val">${nova.length}</div><div class="cstat-label">Vendas Novas</div></div>
@@ -1381,6 +1415,13 @@ function openVendaModal(vendaOrigem=null){
       <span class="med-valor">R$ ${m.valor.toLocaleString('pt-BR')}</span>
     </label>`).join('');
   $('medicoes-subtotal').style.display='none';
+  if($('psico-toggle')){
+    $('psico-toggle').classList.remove('checked');
+    $('psico-config').style.display='none';
+    $('f-psico-colabs').value='';
+    $('f-psico-subtotal').value='';
+    $('f-valor').dataset.psicoTotal=0;
+  }
   switchLaudoTab('laudos',document.querySelector('.laudo-tab'));
   vendaFormDirty=false;
   ['f-empresa','f-cnpj','f-contato','f-telefone','f-valor','f-repasse','f-lucro','f-venc','f-asaas','f-obs','f-atividade'].forEach(id=>{if($(id))$(id).value='';});
@@ -1435,9 +1476,46 @@ function closeModal(id){$(id).classList.remove('open');}
 function switchLaudoTab(panel,btn){
   document.querySelectorAll('.laudo-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.laudo-tab').forEach(t=>t.classList.remove('active'));
-  const panelMap={laudos:'panel-laudos',nrs:'panel-nrs',medicoes:'panel-medicoes'};
+  const panelMap={laudos:'panel-laudos',nrs:'panel-nrs',medicoes:'panel-medicoes',psicossocial:'panel-psicossocial'};
   $(panelMap[panel]||'panel-laudos').classList.add('active');
   if(btn)btn.classList.add('active');
+}
+
+function togglePsicossocial(el){
+  el.classList.toggle('checked');
+  const ativo=el.classList.contains('checked');
+  $('psico-config').style.display=ativo?'block':'none';
+  if(ativo){
+    if(!$('f-psico-colabs').value)$('f-psico-colabs').value=1;
+    calcPsicossocial();
+    // Vencimento automático 12 meses
+    const dataVenda=$('f-data').value||new Date().toISOString().split('T')[0];
+    if(!$('f-venc').value)$('f-venc').value=addMonths(dataVenda,PSICOSSOCIAL_MESES);
+  } else {
+    $('f-psico-colabs').value='';
+    $('f-psico-subtotal').value='';
+    // Remove o valor psico do total
+    const prevPsico=parseFloat($('f-valor').dataset.psicoTotal||0);
+    const valorAtual=parseFloat($('f-valor').value)||0;
+    $('f-valor').value=Math.max(0,valorAtual-prevPsico)||'';
+    $('f-valor').dataset.psicoTotal=0;
+    calcLucro();
+  }
+  updateSelSummary();
+  vendaFormDirty=true;
+}
+
+function calcPsicossocial(){
+  const colabs=parseInt($('f-psico-colabs').value)||0;
+  const subtotal=colabs*PSICOSSOCIAL_VALOR_POR_COLAB;
+  $('f-psico-subtotal').value=fmtMoney(subtotal);
+  // Atualiza o valor total da venda
+  const prevPsico=parseFloat($('f-valor').dataset.psicoTotal||0);
+  const valorAtual=parseFloat($('f-valor').value)||0;
+  $('f-valor').value=(valorAtual-prevPsico+subtotal)||subtotal;
+  $('f-valor').dataset.psicoTotal=subtotal;
+  calcLucro();
+  vendaFormDirty=true;
 }
 
 function toggleMedicao(el){
@@ -1622,6 +1700,10 @@ async function salvarVenda(){
     ...[...document.querySelectorAll('#laudos-grid-main .laudo-check.checked, #laudos-grid-nrs .laudo-check.checked')].map(e=>e.dataset.id),
     ...[...document.querySelectorAll('#laudos-grid-medicoes .laudo-check.checked')].map(e=>e.dataset.id),
   ];
+  if($('psico-toggle')?.classList.contains('checked')){
+    const colabs=parseInt($('f-psico-colabs').value)||0;
+    if(colabs>0)laudos.push(`Psicossocial (${colabs} colab)`);
+  }
   if(!empresa){toast('⚠️ Informe o nome da empresa',true);return;}
   if(!valor||valor<=0){toast('⚠️ Informe o valor',true);return;}
   if(!laudos.length){toast('⚠️ Selecione ao menos 1 laudo',true);return;}
@@ -1654,6 +1736,19 @@ async function deletarVenda(id){
   allVendas=allVendas.filter(v=>v.id!==id);
   toast('🗑 Venda removida.');
   render(document.querySelector('.page.active').id);
+}
+  
+  async function deletarClienteInteiro(empresaEnc){
+  const empresa=decodeURIComponent(empresaEnc);
+  const vendas=allVendas.filter(v=>v.empresa===empresa);
+  if(!confirm(`⚠️ ATENÇÃO: Isso vai excluir TODAS as ${vendas.length} vendas de "${empresa}" permanentemente.\n\nTem certeza?`))return;
+  if(!confirm(`Última confirmação: excluir ${vendas.length} registros de "${empresa}"?`))return;
+  const ids=vendas.map(v=>v.id);
+  const{error}=await db.from('vendas').delete().in('id',ids);
+  if(error){toast('❌ Erro ao excluir. Verifique o console.',true);console.error(error);return;}
+  allVendas=allVendas.filter(v=>v.empresa!==empresa);
+  toast(`🗑 ${vendas.length} vendas de "${empresa}" removidas.`);
+  showPage('page-clientes');
 }
 
 // ═══ GERENCIAR EQUIPE ═══
