@@ -439,6 +439,34 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
         <button class="btn btn-primary" onclick="openVendaModal()">+ Nova Venda</button>
       </div>
     </div>
+    <!-- Barra de filtros da tabela Todas as Vendas -->
+    <div class="vendas-filtros" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+      <input id="vendas-search" type="text" placeholder="🔍 Buscar empresa, CNPJ ou vendedor..." oninput="renderGestor()" style="flex:1;min-width:220px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;background:var(--bg);outline:none;">
+      <select id="vendas-laudo" onchange="renderGestor()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;background:var(--bg);cursor:pointer;outline:none;">
+        <option value="">📑 Todos os laudos</option>
+      </select>
+      <select id="vendas-status" onchange="renderGestor()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;background:var(--bg);cursor:pointer;outline:none;">
+        <option value="">📌 Todos os status</option>
+        <option value="vencido">🔴 Vencidos</option>
+        <option value="vencer30">🟠 Vence em 30 dias</option>
+        <option value="ativo">🟢 Ativos</option>
+      </select>
+      <select id="vendas-pgto" onchange="renderGestor()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;background:var(--bg);cursor:pointer;outline:none;">
+        <option value="">💳 Todos os pgtos</option>
+        <option value="Pago">Pago</option>
+        <option value="Pendente">Pendente</option>
+      </select>
+      <select id="vendas-sort" onchange="renderGestor()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:'Outfit',sans-serif;font-size:13px;background:var(--bg);cursor:pointer;outline:none;">
+        <option value="recentes">🆕 Últimas vendas</option>
+        <option value="antigas">📜 Mais antigas</option>
+        <option value="venc-prox">⏰ Vencimento mais próximo</option>
+        <option value="valor-desc">💰 Maior valor</option>
+        <option value="valor-asc">💵 Menor valor</option>
+        <option value="empresa">🔤 Empresa (A-Z)</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="limparFiltrosVendas()" id="btn-limpar-filtros-vendas" style="color:var(--text3)" title="Limpar filtros">✕ Limpar</button>
+      <span id="vendas-count" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Empresa</th><th>Vendedor</th><th>Laudos</th><th>Valor</th><th>Lucro</th><th>Vencimento</th><th>Status</th><th>Pgto</th><th></th></tr></thead>
@@ -831,6 +859,7 @@ function pgtoClass(p){
 
 // ═══ INIT ═══
 async function init(){
+  popularSelectLaudosFiltro();
   try{
     const{data,error}=await db.from('vendedores').select('*').or('ativo.is.null,ativo.eq.true');
     if(error)throw error;
@@ -1381,8 +1410,59 @@ function renderGestor(){
       </div>
     </div>`;
   }).join('');
-  const sorted=[...filtradas].sort((a,b)=>(diasParaVencer(a.vencimento)??999)-(diasParaVencer(b.vencimento)??999));
-  $('tb-gestor').innerHTML=sorted.map(v=>{
+  // ── Aplica filtros da barra (busca, laudo, status, pgto) e ordenação ──
+  const q=($('vendas-search')?.value||'').trim().toLowerCase();
+  const fLaudo=$('vendas-laudo')?.value||'';
+  const fStatus=$('vendas-status')?.value||'';
+  const fPgto=$('vendas-pgto')?.value||'';
+  const sortBy=$('vendas-sort')?.value||'recentes';
+
+  let visiveis=filtradas.filter(v=>{
+    if(q){
+      const u=getUser(v.vendedor_id);
+      const hay=`${v.empresa||''} ${v.cnpj||''} ${u?.nome||''}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    if(fLaudo){
+      const laudos=v.laudos||[];
+      // Match exato OU prefixo (ex.: "Medição" pega "Medição-Ruído"; "Psicossocial" pega "Psicossocial (12 colab)")
+      const ok=laudos.some(l=>l===fLaudo||l.startsWith(fLaudo+'-')||l.startsWith(fLaudo+' '));
+      if(!ok) return false;
+    }
+    if(fStatus){
+      const dias=diasParaVencer(v.vencimento);
+      if(fStatus==='vencido' && !(dias!==null && dias<0)) return false;
+      if(fStatus==='vencer30' && !(dias!==null && dias>=0 && dias<=30)) return false;
+      if(fStatus==='ativo' && !(dias!==null && dias>30)) return false;
+    }
+    if(fPgto){
+      const p=v.pgto||'Pendente';
+      // "Pago" pega "Pago" e "Pago - Asaas"
+      if(fPgto==='Pago' && !p.startsWith('Pago')) return false;
+      if(fPgto==='Pendente' && p.startsWith('Pago')) return false;
+    }
+    return true;
+  });
+
+  visiveis.sort((a,b)=>{
+    if(sortBy==='recentes')   return new Date(b.data_venda||0)-new Date(a.data_venda||0);
+    if(sortBy==='antigas')    return new Date(a.data_venda||0)-new Date(b.data_venda||0);
+    if(sortBy==='venc-prox')  return (diasParaVencer(a.vencimento)??999)-(diasParaVencer(b.vencimento)??999);
+    if(sortBy==='valor-desc') return Number(b.valor||0)-Number(a.valor||0);
+    if(sortBy==='valor-asc')  return Number(a.valor||0)-Number(b.valor||0);
+    if(sortBy==='empresa')    return (a.empresa||'').localeCompare(b.empresa||'','pt-BR');
+    return 0;
+  });
+
+  // Contador
+  if($('vendas-count')) $('vendas-count').textContent=`${visiveis.length} de ${filtradas.length} venda${filtradas.length!==1?'s':''}`;
+
+  if(!visiveis.length){
+    $('tb-gestor').innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Nenhuma venda encontrada com esses filtros.</div></div></td></tr>`;
+    return;
+  }
+
+  $('tb-gestor').innerHTML=visiveis.map(v=>{
     const sv=statusVenc(diasParaVencer(v.vencimento));
     const u=getUser(v.vendedor_id);
     return`<tr>
@@ -1397,6 +1477,29 @@ function renderGestor(){
       <td><button class="btn-profile" onclick="showPerfil('${encodeURIComponent(v.empresa)}')">👁</button><button class="btn-del" onclick="deletarVenda(${v.id})">🗑</button></td>
     </tr>`;
   }).join('');
+}
+
+// Limpa todos os filtros da barra de Todas as Vendas
+function limparFiltrosVendas(){
+  if($('vendas-search')) $('vendas-search').value='';
+  if($('vendas-laudo')) $('vendas-laudo').value='';
+  if($('vendas-status')) $('vendas-status').value='';
+  if($('vendas-pgto')) $('vendas-pgto').value='';
+  if($('vendas-sort')) $('vendas-sort').value='recentes';
+  renderGestor();
+}
+
+// Popula o select de laudos com todas as opções disponíveis
+function popularSelectLaudosFiltro(){
+  const sel=$('vendas-laudo'); if(!sel) return;
+  const opts=[
+    ...LAUDOS_PRINCIPAIS.map(l=>l.id),
+    ...LAUDOS_NRS.map(l=>l.id),
+    'Medição',
+    'Psicossocial',
+  ];
+  sel.innerHTML='<option value="">📑 Todos os laudos</option>'+
+    opts.map(id=>`<option value="${id}">${id}</option>`).join('');
 }
 
 // ═══ MODAL VENDA ═══
