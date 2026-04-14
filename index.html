@@ -139,6 +139,8 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
 .input-with-btn input{flex:1;}
 .cnpj-info{background:var(--green-light);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--green);margin-top:4px;display:none;}
 .cnpj-info.show{display:block;}
+.doc-type-btn{cursor:pointer;}
+.doc-type-btn.active{background:var(--green);color:#fff;border-color:var(--green);}
 
 /* LAUDOS */
 .laudos-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;}
@@ -459,11 +461,20 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
     </div>
     <div class="form-grid">
 
-      <!-- CNPJ com busca automática -->
+      <!-- Tipo de identificação (CNPJ ou CEI/CAEPF) -->
       <div class="form-group">
-        <label>CNPJ — busca automática</label>
+        <label>Tipo de identificação</label>
+        <div class="doc-type-toggle" style="display:flex;gap:6px;">
+          <button type="button" class="btn btn-ghost btn-sm doc-type-btn active" data-tipo="CNPJ" onclick="setDocTipo('CNPJ')" id="btn-tipo-cnpj" style="flex:1">🏢 CNPJ</button>
+          <button type="button" class="btn btn-ghost btn-sm doc-type-btn" data-tipo="CEI" onclick="setDocTipo('CEI')" id="btn-tipo-cei" style="flex:1">🪪 CEI / CAEPF</button>
+        </div>
+      </div>
+
+      <!-- Documento com busca automática (apenas p/ CNPJ) -->
+      <div class="form-group">
+        <label id="doc-label">CNPJ — busca automática</label>
         <div class="input-with-btn">
-          <input id="f-cnpj" type="text" placeholder="00.000.000/0001-00" oninput="maskCNPJ(this)" maxlength="18">
+          <input id="f-cnpj" type="text" placeholder="00.000.000/0001-00" oninput="maskDoc(this)" maxlength="18">
           <button class="btn btn-ghost btn-sm" onclick="buscarCNPJ()" id="btn-cnpj">🔍 Buscar</button>
         </div>
         <div class="cnpj-info" id="cnpj-info"></div>
@@ -471,7 +482,7 @@ tbody td{padding:11px 16px;font-size:13px;color:var(--text);vertical-align:middl
 
       <div class="form-grid-2">
         <div class="form-group">
-          <label>Nome da Empresa *</label>
+          <label>Nome da Empresa / Tomador *</label>
           <input id="f-empresa" type="text" placeholder="COMERCIO BRASIL LTDA" oninput="this.value=this.value.toUpperCase()">
         </div>
         <div class="form-group">
@@ -1435,8 +1446,14 @@ function openVendaModal(vendaOrigem=null){
   if($('f-valor'))$('f-valor').dataset.medTotal=0;
   $('f-venc').disabled=false;
 
+  // Reseta seletor de tipo de documento para CNPJ (padrão)
+  if(typeof setDocTipo==='function')setDocTipo('CNPJ');
+
   // Se for renovação, pré-preenche com dados da venda original
   if(vendaOrigem){
+    // Detecta se a venda original era CEI/CAEPF (sem barra "/0001-" típica de CNPJ)
+    const cnpjOrig=(vendaOrigem.cnpj||'').replace(/\D/g,'');
+    if(cnpjOrig && cnpjOrig.length<=12 && !/0001/.test(cnpjOrig)){setDocTipo('CEI');}
     $('f-empresa').value=vendaOrigem.empresa||'';
     $('f-cnpj').value=vendaOrigem.cnpj||'';
     $('f-contato').value=vendaOrigem.contato||'';
@@ -1614,14 +1631,71 @@ function updateVencAuto(){
 function sugerirValor(){const v=$('f-func').value;if(v){$('f-valor').value=v;calcLucro();vendaFormDirty=true;}}
 function calcLucro(){const v=parseFloat($('f-valor').value)||0,r=parseFloat($('f-repasse').value)||0;$('f-lucro').value=v>0?fmtMoney(v-r):'—';}
 
+// Tipo de documento atual no modal de venda (CNPJ ou CEI)
+let docTipoAtual='CNPJ';
+
+function setDocTipo(tipo){
+  docTipoAtual=tipo;
+  const btnCnpj=$('btn-tipo-cnpj'), btnCei=$('btn-tipo-cei');
+  btnCnpj.classList.toggle('active',tipo==='CNPJ');
+  btnCei.classList.toggle('active',tipo==='CEI');
+  const inp=$('f-cnpj'), btnBuscar=$('btn-cnpj'), label=$('doc-label'), ativ=$('f-atividade');
+  if(tipo==='CNPJ'){
+    label.textContent='CNPJ — busca automática';
+    inp.placeholder='00.000.000/0001-00';
+    inp.maxLength=18;
+    btnBuscar.style.display='';
+    ativ.disabled=true;
+    ativ.placeholder='Preenchido automaticamente';
+  }else{
+    // CEI tem 12 dígitos · CAEPF tem 14 (CPF + 3). Aceita ambos.
+    label.textContent='CEI / CAEPF — preenchimento manual';
+    inp.placeholder='00.000.00000/00 (CEI) ou 000.000.000/000-00 (CAEPF)';
+    inp.maxLength=20;
+    btnBuscar.style.display='none';
+    ativ.disabled=false;
+    ativ.placeholder='Digite a atividade do tomador';
+    // Limpa info de CNPJ anterior e Grau de Risco automático
+    $('cnpj-info').classList.remove('show');
+    $('gr-box').style.display='none';
+  }
+  // Limpa o valor pra evitar máscara cruzada
+  inp.value='';
+  vendaFormDirty=true;
+}
+
+function maskDoc(inp){
+  if(docTipoAtual==='CEI'){ maskCEI(inp); } else { maskCNPJ(inp); }
+}
+
 function maskCNPJ(inp){
   let v=inp.value.replace(/\D/g,'').slice(0,14);
   v=v.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d)/,'$1-$2');
   inp.value=v;vendaFormDirty=true;
 }
 
+function maskCEI(inp){
+  // Aceita CEI (12 díg: XX.XXX.XXXXX/XX) ou CAEPF (14 díg: XXX.XXX.XXX/XXX-XX)
+  let raw=inp.value.replace(/\D/g,'').slice(0,14);
+  let v=raw;
+  if(raw.length<=12){
+    // formato CEI: 00.000.00000/00
+    v=raw.replace(/^(\d{2})(\d)/,'$1.$2')
+         .replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
+         .replace(/^(\d{2})\.(\d{3})\.(\d{5})(\d)/,'$1.$2.$3/$4');
+  }else{
+    // formato CAEPF: 000.000.000/000-00
+    v=raw.replace(/^(\d{3})(\d)/,'$1.$2')
+         .replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3')
+         .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/,'$1.$2.$3/$4')
+         .replace(/^(\d{3})\.(\d{3})\.(\d{3})\/(\d{3})(\d)/,'$1.$2.$3/$4-$5');
+  }
+  inp.value=v;vendaFormDirty=true;
+}
+
 // ═══ BUSCA CNPJ (BrasilAPI) ═══
 async function buscarCNPJ(){
+  if(docTipoAtual==='CEI'){toast('ℹ️ CEI/CAEPF não tem consulta automática — preencha manualmente',true);return;}
   const raw=$('f-cnpj').value.replace(/\D/g,'');
   if(raw.length!==14){toast('⚠️ CNPJ deve ter 14 dígitos',true);return;}
   const btn=$('btn-cnpj');btn.textContent='⏳';btn.disabled=true;
